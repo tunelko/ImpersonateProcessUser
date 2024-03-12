@@ -84,6 +84,99 @@ _END_OF_FUNC:
         CloseHandle(hCurrentTokenHandle);
     return bResult;
 }
+/*
+ * QueryTokenIntegrity
+ * -------------------
+ * Queries the integrity level of the specified access token. Integrity levels
+ * determine the trustworthiness of objects like processes and threads. Higher
+ * integrity levels are granted more access and privileges than lower ones.
+ *
+ * Parameters:
+ * - hToken: A handle to the access token from which the integrity level will be queried.
+ *           This handle must have TOKEN_QUERY access.
+ *
+ * Returns:
+ * - The integrity level of the token as a DWORD. Common values include SECURITY_MANDATORY_LOW_RID for low,
+ *   SECURITY_MANDATORY_MEDIUM_RID for medium, and SECURITY_MANDATORY_HIGH_RID for high integrity levels.
+ *   Returns 0 on failure, after which GetLastError can be called for more error information.
+ *
+ * Note:
+ * This function does not directly return an NTSTATUS code or BOOL success flag;
+ * instead, it returns the integrity level directly. A return value of 0 indicates
+ * a failure to query the integrity level, possibly due to insufficient access rights
+ * or an invalid token handle.
+ */
+
+DWORD QueryTokenIntegrity(IN HANDLE hToken) {
+
+    NTSTATUS                    STATUS = 0x00;
+    PTOKEN_MANDATORY_LABEL      pTokenLabel = NULL;
+    ULONG                       uReturnLength = 0x00,
+        uSidCount = 0x00;
+    DWORD                       dwIntegrity = THREAD_INTEGRITY_UNKNOWN;
+    fnNtQueryInformationToken   pNtQueryInformationToken = NULL;
+    fnRtlSubAuthorityCountSid   pRtlSubAuthorityCountSid = NULL;
+    fnRtlSubAuthoritySid        pRtlSubAuthoritySid = NULL;
+
+    if (!hToken)
+        return FALSE;
+
+    if (!(pNtQueryInformationToken = (fnNtQueryInformationToken)GetProcAddress(GetModuleHandle(TEXT("NTDLL")), "NtQueryInformationToken"))) {
+        printf("[!] GetProcAddress [%d] Failed With Error: %d \n", __LINE__, GetLastError());
+        return FALSE;
+    }
+
+    if (!(pRtlSubAuthorityCountSid = (fnRtlSubAuthorityCountSid)GetProcAddress(GetModuleHandle(TEXT("NTDLL")), "RtlSubAuthorityCountSid"))) {
+        printf("[!] GetProcAddress [%d] Failed With Error: %d \n", __LINE__, GetLastError());
+        return FALSE;
+    }
+
+    if (!(pRtlSubAuthoritySid = (fnRtlSubAuthoritySid)GetProcAddress(GetModuleHandle(TEXT("NTDLL")), "RtlSubAuthoritySid"))) {
+        printf("[!] GetProcAddress [%d] Failed With Error: %d \n", __LINE__, GetLastError());
+        return FALSE;
+    }
+
+    if ((STATUS = pNtQueryInformationToken(hToken, TokenIntegrityLevel, NULL, 0x00, &uReturnLength)) != STATUS_SUCCESS && STATUS != STATUS_BUFFER_TOO_SMALL) {
+        printf("[!] NtQueryInformationToken [%d] Failed With Error: 0x%0.8X \n", __LINE__, STATUS);
+        return FALSE;
+    }
+
+    if (!(pTokenLabel = LocalAlloc(LPTR, uReturnLength))) {
+        printf("[!] LocalAlloc Failed With Error: %d \n", GetLastError());
+        return FALSE;
+    }
+
+    if ((STATUS = pNtQueryInformationToken(hToken, TokenIntegrityLevel, pTokenLabel, uReturnLength, &uReturnLength)) != STATUS_SUCCESS) {
+        printf("[!] NtQueryInformationToken [%d] Failed With Error: 0x%0.8X \n", __LINE__, STATUS);
+        goto _END_OF_FUNC;
+    }
+
+    uSidCount = (*pRtlSubAuthorityCountSid(pTokenLabel->Label.Sid)) - 1;
+
+    if ((dwIntegrity = *pRtlSubAuthoritySid(pTokenLabel->Label.Sid, uSidCount))) {
+
+        if (dwIntegrity < SECURITY_MANDATORY_LOW_RID)
+            dwIntegrity = THREAD_INTEGRITY_UNKNOWN;
+
+        if (dwIntegrity < SECURITY_MANDATORY_MEDIUM_RID)
+            dwIntegrity = THREAD_INTEGRITY_LOW;
+
+        if (dwIntegrity >= SECURITY_MANDATORY_MEDIUM_RID && dwIntegrity < SECURITY_MANDATORY_HIGH_RID)
+            dwIntegrity = THREAD_INTEGRITY_MEDIUM;
+
+        if (dwIntegrity >= SECURITY_MANDATORY_HIGH_RID)
+            dwIntegrity = THREAD_INTEGRITY_HIGH;
+    }
+
+
+_END_OF_FUNC:
+    if (pTokenLabel)
+        LocalFree(pTokenLabel);
+    return dwIntegrity;
+}
+
+
+
 /**
  * Checks if the SeDebugPrivilege is enabled for the current process.
  *
@@ -219,6 +312,8 @@ BOOL ImpersonateProcess(DWORD dwProcessId) {
     }
 
     IsTokenElevated(hDuplicatedToken);
+    QueryTokenIntegrity(hDuplicatedToken); 
+
     bResult = TRUE;
 
 _END_OF_FUNC:
