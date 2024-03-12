@@ -112,7 +112,7 @@ DWORD QueryTokenIntegrity(IN HANDLE hToken) {
     NTSTATUS                    STATUS = 0x00;
     PTOKEN_MANDATORY_LABEL      pTokenLabel = NULL;
     ULONG                       uReturnLength = 0x00,
-        uSidCount = 0x00;
+                                uSidCount = 0x00;
     DWORD                       dwIntegrity = THREAD_INTEGRITY_UNKNOWN;
     fnNtQueryInformationToken   pNtQueryInformationToken = NULL;
     fnRtlSubAuthorityCountSid   pRtlSubAuthorityCountSid = NULL;
@@ -167,11 +167,15 @@ DWORD QueryTokenIntegrity(IN HANDLE hToken) {
         if (dwIntegrity >= SECURITY_MANDATORY_HIGH_RID)
             dwIntegrity = THREAD_INTEGRITY_HIGH;
     }
+    
+
+     const char* IntegrityString = IntegrityLevelToString(dwIntegrity);
+     printf("[+] Integrity Level: %s\n", IntegrityString); 
 
 
 _END_OF_FUNC:
     if (pTokenLabel)
-        LocalFree(pTokenLabel);
+        LocalFree(pTokenLabel);       
     return dwIntegrity;
 }
 
@@ -311,8 +315,9 @@ BOOL ImpersonateProcess(DWORD dwProcessId) {
         printf("[!] Failed to launch command with impersonated user.\n");
     }
 
+
     IsTokenElevated(hDuplicatedToken);
-    QueryTokenIntegrity(hDuplicatedToken); 
+    QueryTokenIntegrity(hDuplicatedToken);
 
     bResult = TRUE;
 
@@ -495,6 +500,7 @@ int wmain(int argc, WCHAR** argv, WCHAR** envp)
         printf("[!] Failed to set SeDebugPrivilege.\n");
         return -1; 
     }
+    
     // Token impersonation 
     ImpersonateProcess(dwProcessId); 
 
