@@ -18,9 +18,15 @@
     <ClCompile Include="main.c">
       <Filter>Archivos de origen</Filter>
     </ClCompile>
+    <ClCompile Include="inject_shellcode.c">
+      <Filter>Archivos de origen</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Header.h">
+    <ClInclude Include="Structs.h">
+      <Filter>Archivos de origen</Filter>
+    </ClInclude>
+    <ClInclude Include="inject.h">
       <Filter>Archivos de origen</Filter>
     </ClInclude>
   </ItemGroup>

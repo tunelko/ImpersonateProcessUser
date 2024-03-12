@@ -38,4 +38,10 @@ const char* IntegrityLevelToString(DWORD integrityLevel) {
     }
 }
 
+// PATCH ETW 
+typedef enum PATCH
+{
+    PATCH_ETW_EVENTWRITE,
+    PATCH_ETW_EVENTWRITE_FULL
+};
 #endif // STRUCTS_H

