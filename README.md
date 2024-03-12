@@ -29,17 +29,9 @@ Where `<PID>` is the process ID of the target process you wish to impersonate.
 ## Requirements
 - Windows operating system
 - Administrative privileges for the calling process
-- C compiler (e.g., MSVC, MinGW, VS 2022 ...) for building the executable
+- C compiler (e.g., MSVC, MinGW ...) for building the executable
+- Visual Studio Community Edition 2022 C/C++ 
 
-## Compilation
-To compile the project, you can use a command similar to the following, adjusted for your specific compiler and environment:
-```
-cl ImpersonateProcess.c /ImpersonateProcess.exe /link Advapi32.lib
-```
-or using GCC (MinGW):
-```
-gcc ImpersonateProcess.c -o ImpersonateProcess.exe -ladvapi32
-```
 
 ## Disclaimer
 This project is intended for educational purposes and should be used responsibly and ethically. This code is a part of training process of maldev-academy. Ensure you have authorization before impersonating processes, especially in environments that are not owned or managed by you.
