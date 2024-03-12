@@ -37,7 +37,7 @@ BOOL InjectShellcodeFileLocally(IN LPCWSTR wsShellFileName) {
 		goto _EndOfFunc;
 	}
 
-	printf("\t> Running Payload Via Thread ");
+	printf("\t[-] Running Shellcode Payload via Thread ");
 	DWORD	dwThreadId = 0x00;
 	HANDLE	hThread = CreateThread(NULL, NULL, pBufferData, NULL, NULL, &dwThreadId);
 	printf("[ %d ] ... \n", dwThreadId);

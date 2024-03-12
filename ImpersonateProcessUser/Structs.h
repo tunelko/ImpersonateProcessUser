@@ -8,8 +8,6 @@
 #define THREAD_INTEGRITY_MEDIUM    2
 #define THREAD_INTEGRITY_HIGH      3
 
-#include <Windows.h>
-#include <winternl.h> // For NTSTATUS and TOKEN_INFORMATION_CLASS
 
 typedef PUCHAR(NTAPI* fnRtlSubAuthorityCountSid)(IN PSID Sid);
 typedef PULONG(NTAPI* fnRtlSubAuthoritySid)(IN PSID Sid, IN ULONG SubAuthority);
@@ -38,10 +36,16 @@ const char* IntegrityLevelToString(DWORD integrityLevel) {
     }
 }
 
-// PATCH ETW 
+
+#define x64_RET_INSTRUCTION_OPCODE			0xC3		// 'ret'	- instruction opcode
+#define x64_MOV_INSTRUCTION_OPCODE			0xB8		// 'mov'	- instruction opcode
+#define	x64_SYSCALL_STUB_SIZE				0x20		// size of a syscall stub is 32
+
+
 typedef enum PATCH
 {
     PATCH_ETW_EVENTWRITE,
     PATCH_ETW_EVENTWRITE_FULL
 };
+
 #endif // STRUCTS_H

