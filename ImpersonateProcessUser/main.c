@@ -266,7 +266,12 @@ BOOL LaunchCommandWithImpersonatedUser(HANDLE hDuplicatedToken, LPCWSTR lpApplic
     BOOL bResult = FALSE;
 
     // "cmd.exe" 
-    LPCWSTR lpCommandLine = L"C:\\Windows\\system32\\cmd.exe";
+    LPCWSTR lpCommandLine =
+        L"C:\\Windows\\system32\\cmd.exe /c "
+        L"echo [+] Your user now is ... && "
+        L"whoami && "
+        L"echo [+] Spawning your shell ... && "
+        L"cmd.exe";
 
     bResult = CreateProcessWithTokenW(hDuplicatedToken, LOGON_WITH_PROFILE, lpApplicationName, (LPWSTR)lpCommandLine, 0, NULL, NULL, &si, &pi);
     if (!bResult) {
